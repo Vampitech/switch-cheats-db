@@ -192,7 +192,7 @@ if __name__ == '__main__':
 
         print(f"Descargando cheats desde Vampitech...")
         archive_worker.download_archive(vampitech.get_download_url(), archive_path)
-        archive_worker.extract_archive(archive_path, "vampitech")
+        archive_worker.extract_archive(archive_path, "gbatemp")
 
         print("Descargando cheats High FPS...")
         archive_worker.download_archive(highfps.get_download_url(), "highfps.zip")
