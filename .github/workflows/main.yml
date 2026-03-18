@@ -13,25 +13,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      - run: |
+      - name: Install dependencies
+        run: |
           if [ -f ./requirements_versions.txt ]; then
             pip install -r ./requirements_versions.txt
           fi
 
-      - run: python process_versions.py
+      - name: Run script
+        run: python process_versions.py
 
       - name: Commit & Push
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
-          git add versions.json versions/ 2>/dev/null || true
+          git pull origin main --rebase
+
+          git add .
+
+          echo "==== STATUS ===="
+          git status
+          echo "================"
 
           if git diff --cached --quiet; then
             echo "No hay cambios"
@@ -45,20 +57,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      - run: |
+      - name: Install Python dependencies
+        run: |
           if [ -f ./requirements_cheats.txt ]; then
             pip install -r ./requirements_cheats.txt
           fi
 
-      - run: sudo apt-get update && sudo apt-get install -y unrar
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unrar
 
-      - run: python database_builder.py
+      - name: Run script
+        run: python database_builder.py
 
       - name: Commit + Release
         env:
@@ -67,44 +88,49 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
-          git add cheats/ cheats_gfx/ README.md 2>/dev/null || true
-          [ -d cheats_gbatemp ] && git add cheats_gbatemp/ || true
+          git pull origin main --rebase
+
+          git add .
+
+          echo "==== STATUS ===="
+          git status
+          echo "================"
 
           if git diff --cached --quiet; then
             echo "No hay cambios → no hay release"
             exit 0
           fi
 
-          # Hay cambios → commit
           stat=$(git diff --cached --name-only)
+
           git commit -m "automatic: updated cheat files"
           git push
 
-          # Generar versión automática por fecha
+          # Crear versión por fecha
           version=$(date +'%Y-%m-%d')
 
           # Crear changelog
           echo -e "Last updated: **$version**\n\nFiles changed:\n\`\`\`\n$(echo $stat | xargs python3 build_changelog.py)\n\`\`\`" > changelog.md
 
-          # Crear release solo si no existe
+          # Crear o actualizar release
           if gh release view "$version" >/dev/null 2>&1; then
-            echo "Release ya existe, se actualizan archivos"
+            echo "Release ya existe → se actualiza"
           else
             gh release create "$version" -F changelog.md
           fi
 
-          # Subir archivos
+          # Subir archivos (si existen)
           [ -f ./gbatemp/contents.zip ] && gh release upload "$version" ./gbatemp/contents.zip --clobber || true
           [ -f ./gbatemp/titles.zip ] && gh release upload "$version" ./gbatemp/titles.zip --clobber || true
 
           mv ./NX-60FPS-RES-GFX-Cheats-main/contents.zip ./NX-60FPS-RES-GFX-Cheats-main/contents_60fps-res-gfx.zip 2>/dev/null || true
           mv ./NX-60FPS-RES-GFX-Cheats-main/titles.zip ./NX-60FPS-RES-GFX-Cheats-main/titles_60fps-res-gfx.zip 2>/dev/null || true
 
-          gh release upload "$version" ./NX-60FPS-RES-GFX-Cheats-main/contents_60fps-res-gfx.zip --clobber || true
-          gh release upload "$version" ./NX-60FPS-RES-GFX-Cheats-main/titles_60fps-res-gfx.zip --clobber || true
+          [ -f ./NX-60FPS-RES-GFX-Cheats-main/contents_60fps-res-gfx.zip ] && gh release upload "$version" ./NX-60FPS-RES-GFX-Cheats-main/contents_60fps-res-gfx.zip --clobber || true
+          [ -f ./NX-60FPS-RES-GFX-Cheats-main/titles_60fps-res-gfx.zip ] && gh release upload "$version" ./NX-60FPS-RES-GFX-Cheats-main/titles_60fps-res-gfx.zip --clobber || true
 
           mv ./complete/contents.zip ./complete/contents_complete.zip 2>/dev/null || true
           mv ./complete/titles.zip ./complete/titles_complete.zip 2>/dev/null || true
 
-          gh release upload "$version" ./complete/contents_complete.zip --clobber || true
-          gh release upload "$version" ./complete/titles_complete.zip --clobber || true
+          [ -f ./complete/contents_complete.zip ] && gh release upload "$version" ./complete/contents_complete.zip --clobber || true
+          [ -f ./complete/titles_complete.zip ] && gh release upload "$version" ./complete/titles_complete.zip --clobber || true
