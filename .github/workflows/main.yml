@@ -1,0 +1,116 @@
+name: Update Repo
+
+on:
+  schedule:
+    - cron: '30 22 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # necesario para push + releases
+
+jobs:
+  update-versions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          if [ -f ./requirements_versions.txt ]; then
+            pip install -r ./requirements_versions.txt
+          fi
+
+      - name: Run script
+        run: python process_versions.py
+
+      - name: Commit & Push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add versions.json versions/ || true
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+          else
+            git commit -m "automatic: updated version files"
+            git push
+          fi
+
+  update-cheats:
+    needs: update-versions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Python deps
+        run: |
+          if [ -f ./requirements_cheats.txt ]; then
+            pip install -r ./requirements_cheats.txt
+          fi
+
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y unrar
+
+      - name: Run script
+        run: python database_builder.py
+
+      # 🔐 Autenticación para gh CLI
+      - name: Authenticate gh
+        run: echo "${GITHUB_TOKEN}" | gh auth login --with-token
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit & Push changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add cheats/ cheats_gfx/ README.md || true
+          [ -d cheats_gbatemp ] && git add cheats_gbatemp/ || true
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+            exit 0
+          fi
+
+          stat=$(git diff --cached --name-only)
+          git commit -m "automatic: updated cheat files"
+          git push
+
+          version=$(cat VERSION)
+
+          echo -e "Last updated: **$version**\n\nCheats updated:\n\`\`\`\n$(echo $stat | xargs python3 build_changelog.py)\n\`\`\`" > changelog.md
+
+          # 🚀 Crear release (si no existe)
+          gh release view "$version" >/dev/null 2>&1 || gh release create "$version" -F changelog.md
+
+          # 📦 Subir archivos
+          [ -f ./gbatemp/contents.zip ] && gh release upload "$version" ./gbatemp/contents.zip --clobber || true
+          [ -f ./gbatemp/titles.zip ] && gh release upload "$version" ./gbatemp/titles.zip --clobber || true
+
+          mv ./NX-60FPS-RES-GFX-Cheats-main/contents.zip ./NX-60FPS-RES-GFX-Cheats-main/contents_60fps-res-gfx.zip 2>/dev/null || true
+          mv ./NX-60FPS-RES-GFX-Cheats-main/titles.zip ./NX-60FPS-RES-GFX-Cheats-main/titles_60fps-res-gfx.zip 2>/dev/null || true
+
+          gh release upload "$version" ./NX-60FPS-RES-GFX-Cheats-main/contents_60fps-res-gfx.zip --clobber || true
+          gh release upload "$version" ./NX-60FPS-RES-GFX-Cheats-main/titles_60fps-res-gfx.zip --clobber || true
+
+          mv ./complete/contents.zip ./complete/contents_complete.zip 2>/dev/null || true
+          mv ./complete/titles.zip ./complete/titles_complete.zip 2>/dev/null || true
+
+          gh release upload "$version" ./complete/contents_complete.zip --clobber || true
+          gh release upload "$version" ./complete/titles_complete.zip --clobber || true
+          gh release upload "$version" VERSION --clobber || true
