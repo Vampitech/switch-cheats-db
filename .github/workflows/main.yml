@@ -87,21 +87,20 @@ jobs:
           if git diff --cached --quiet; then
             echo "Nothing to commit"
           else
-            stat=$(git diff --cached --name-only)
             git commit -m "automatic: updated cheat files"
             git push
           fi
 
-          # El release se crea siempre que existan los zips
           version=$(cat VERSION)
 
           if gh release view "$version" >/dev/null 2>&1; then
-            echo "Release $version ya existe → actualizando assets"
-          else
-            echo "Creando release $version"
-            echo -e "Last updated: **$version**" > changelog.md
-            gh release create "$version" -F changelog.md
+            echo "Release $version ya existe → no se hace nada"
+            exit 0
           fi
+
+          echo "Creando release $version"
+          echo -e "Last updated: **$version**" > changelog.md
+          gh release create "$version" -F changelog.md --title "$version"
 
           [ -f ./gbatemp/contents.zip ] && gh release upload "$version" ./gbatemp/contents.zip --clobber || echo "gbatemp/contents.zip not found"
           [ -f ./gbatemp/titles.zip ]   && gh release upload "$version" ./gbatemp/titles.zip   --clobber || echo "gbatemp/titles.zip not found"
@@ -117,3 +116,5 @@ jobs:
 
           [ -f ./complete/contents_complete.zip ] && gh release upload "$version" ./complete/contents_complete.zip --clobber || true
           [ -f ./complete/titles_complete.zip ]   && gh release upload "$version" ./complete/titles_complete.zip   --clobber || true
+
+          gh release upload "$version" VERSION --clobber
