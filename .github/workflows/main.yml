@@ -107,3 +107,14 @@ jobs:
             gh release upload $version ./complete/titles_complete.zip --clobber
             gh release upload $version VERSION --clobber
           fi
+
+      - name: Debug - show generated files
+        run: |
+            echo "=== git status ==="
+            git status
+            echo "=== cheats/ changes ==="
+            git diff --name-only cheats/ cheats_gfx/ cheats_gbatemp/ README.md || true
+            echo "=== zips generated ==="
+            find . -name "*.zip" 2>/dev/null || echo "No zips found"
+            echo "=== VERSION file ==="
+            cat VERSION 2>/dev/null || echo "VERSION not found"
