@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # necesario para push + releases
+  contents: write
 
 jobs:
   update-versions:
@@ -34,7 +34,8 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add versions.json versions/ || true
+
+          git add versions.json versions/ 2>/dev/null || true
 
           if git diff --cached --quiet; then
             echo "Nothing to commit"
@@ -68,18 +69,12 @@ jobs:
       - name: Run script
         run: python database_builder.py
 
-      # 🔐 Autenticación para gh CLI
-      - name: Authenticate gh
-        run: echo "${GITHUB_TOKEN}" | gh auth login --with-token
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Commit & Push changes
+      - name: Commit & Push + Release
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
-          git add cheats/ cheats_gfx/ README.md || true
+          git add cheats/ cheats_gfx/ README.md 2>/dev/null || true
           [ -d cheats_gbatemp ] && git add cheats_gbatemp/ || true
 
           if git diff --cached --quiet; then
@@ -88,6 +83,7 @@ jobs:
           fi
 
           stat=$(git diff --cached --name-only)
+
           git commit -m "automatic: updated cheat files"
           git push
 
@@ -95,10 +91,10 @@ jobs:
 
           echo -e "Last updated: **$version**\n\nCheats updated:\n\`\`\`\n$(echo $stat | xargs python3 build_changelog.py)\n\`\`\`" > changelog.md
 
-          # 🚀 Crear release (si no existe)
+          # Crear release si no existe
           gh release view "$version" >/dev/null 2>&1 || gh release create "$version" -F changelog.md
 
-          # 📦 Subir archivos
+          # Subir archivos (si existen)
           [ -f ./gbatemp/contents.zip ] && gh release upload "$version" ./gbatemp/contents.zip --clobber || true
           [ -f ./gbatemp/titles.zip ] && gh release upload "$version" ./gbatemp/titles.zip --clobber || true
 
