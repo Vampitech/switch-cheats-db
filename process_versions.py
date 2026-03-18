@@ -4,6 +4,10 @@ import json
 import requests
 import os
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+}
+
 
 class ProcessVersions:
     def __init__(self, cnmts_url, titles_url, versions_url):
@@ -19,8 +23,10 @@ class ProcessVersions:
         self.title_dict = self.create_names_dict(titles_url)
 
     def merge_cmts_and_versions(self, cnmts_url, versions_url):
-        cmnts = json.loads(requests.get(cnmts_url).text)
-        versions = json.loads(requests.get(versions_url).text)
+        cnmt_resp = requests.get(cnmts_url, headers=HEADERS)
+        ver_resp = requests.get(versions_url, headers=HEADERS)
+        cmnts = json.loads(cnmt_resp.text)
+        versions = json.loads(ver_resp.text)
         for tid, value in versions.items():
             cmnts[tid] = {**value, **cmnts.get(tid, {})}
         return cmnts
@@ -80,7 +86,15 @@ class ProcessVersions:
 
     def create_names_dict(self, url):
         out = dict()
-        for key, value in json.loads(requests.get(url).text).items():
+        resp = requests.get(url, headers=HEADERS)
+        try:
+            data = json.loads(resp.text)
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error from {url}: {e}")
+            print(f"Response status: {resp.status_code}")
+            print(f"Response (first 500 chars): {resp.text[:500]}")
+            raise
+        for key, value in data.items():
             out[value["id"]] = value["name"]
         return out
 
